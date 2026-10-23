@@ -23,6 +23,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: mysql
       DB_HOST: mysql
+      # Para uso local. Em produção, defina as variáveis no ambiente em vez de deixá-las aqui.
+      JWT_SECRET: ${JWT_SECRET:-troque-este-segredo-com-pelo-menos-32-bytes}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
     ports:
       - "8080:8080"
 

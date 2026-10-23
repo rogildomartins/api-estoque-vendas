@@ -1,6 +1,7 @@
 package com.manoelrogildo.estoque;
 
 import static org.hamcrest.Matchers.hasItem;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -14,8 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -25,6 +28,9 @@ import com.jayway.jsonpath.JsonPath;
 @SpringBootTest
 @AutoConfigureMockMvc
 class FluxoEstoqueVendaIntegrationTest {
+
+    /** JWT de administrador simulado; o fluxo real de login é coberto em SegurancaIntegrationTest. */
+    private static final RequestPostProcessor ADMIN = jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
 
     @Autowired
     private MockMvc mvc;
@@ -50,7 +56,7 @@ class FluxoEstoqueVendaIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         long vendaId = ((Number) JsonPath.read(vendaJson, "$.id")).longValue();
 
-        mvc.perform(get("/api/produtos/" + produtoId))
+        mvc.perform(get("/api/produtos/" + produtoId).with(ADMIN))
                 .andExpect(jsonPath("$.quantidadeEstoque").value(7));
 
         postJson("/api/vendas/" + vendaId + "/cancelamento", """
@@ -59,10 +65,10 @@ class FluxoEstoqueVendaIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELADA"));
 
-        mvc.perform(get("/api/produtos/" + produtoId))
+        mvc.perform(get("/api/produtos/" + produtoId).with(ADMIN))
                 .andExpect(jsonPath("$.quantidadeEstoque").value(10));
 
-        mvc.perform(get("/api/produtos/" + produtoId + "/movimentacoes"))
+        mvc.perform(get("/api/produtos/" + produtoId + "/movimentacoes").with(ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(3))
                 .andExpect(jsonPath("$.content[0].motivo").value("Cancelamento da venda #" + vendaId))
@@ -84,7 +90,7 @@ class FluxoEstoqueVendaIntegrationTest {
                 .andExpect(jsonPath("$.title").value("Regra de negócio violada"));
 
         // A transação inteira sofreu rollback: o primeiro item também não foi baixado.
-        mvc.perform(get("/api/produtos/" + comEstoque))
+        mvc.perform(get("/api/produtos/" + comEstoque).with(ADMIN))
                 .andExpect(jsonPath("$.quantidadeEstoque").value(5));
     }
 
@@ -111,14 +117,14 @@ class FluxoEstoqueVendaIntegrationTest {
 
     @Test
     void produtoInexistenteRetorna404() throws Exception {
-        mvc.perform(get("/api/produtos/999999"))
+        mvc.perform(get("/api/produtos/999999").with(ADMIN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Produto com id 999999 não encontrado(a)"));
     }
 
     @Test
     void dadosDeExemploAparecemNoRelatorioDeEstoqueBaixo() throws Exception {
-        mvc.perform(get("/api/produtos/estoque-baixo"))
+        mvc.perform(get("/api/produtos/estoque-baixo").with(ADMIN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].sku", hasItem("OLE-900ML")));
     }
@@ -134,6 +140,6 @@ class FluxoEstoqueVendaIntegrationTest {
     }
 
     private ResultActions postJson(String url, String body) throws Exception {
-        return mvc.perform(post(url).contentType(MediaType.APPLICATION_JSON).content(body));
+        return mvc.perform(post(url).with(ADMIN).contentType(MediaType.APPLICATION_JSON).content(body));
     }
 }

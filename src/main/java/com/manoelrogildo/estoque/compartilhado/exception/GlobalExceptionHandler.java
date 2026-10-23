@@ -6,6 +6,10 @@ import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AccountStatusException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -31,6 +35,20 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleConcorrencia(ObjectOptimisticLockingFailureException ex) {
         return problema(HttpStatus.CONFLICT, "Conflito de concorrência",
                 "O registro foi alterado por outra operação. Tente novamente.");
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ProblemDetail handleNaoAutenticado(AuthenticationException ex) {
+        // Mesma mensagem para usuário inexistente, senha errada ou conta inativa: não revela quais logins existem.
+        boolean falhaNoLogin = ex instanceof BadCredentialsException || ex instanceof AccountStatusException;
+        return problema(HttpStatus.UNAUTHORIZED, "Não autenticado", falhaNoLogin
+                ? "Login ou senha inválidos"
+                : "Informe um token válido no cabeçalho Authorization: Bearer <token>");
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAcessoNegado(AccessDeniedException ex) {
+        return problema(HttpStatus.FORBIDDEN, "Acesso negado", "Seu perfil não tem permissão para esta operação");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
